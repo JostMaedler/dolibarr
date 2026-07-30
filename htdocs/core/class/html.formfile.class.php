@@ -1162,9 +1162,16 @@ class FormFile
 	 */
 	public function getDocumentsLink($modulepart, $modulesubdir, $filedir, $filter = '', $morecss = 'valignmiddle', $allfiles = 0)
 	{
-		global $conf, $langs;
+		global $conf, $langs, $hookmanager;
 
 		include_once DOL_DOCUMENT_ROOT.'/core/lib/files.lib.php';
+
+		// Register 'formfile' as an active hook context here (same as showdocuments()) so the
+		// getDocumentsLinkLineOptions hook below works regardless of which context the calling
+		// page itself registered - not just from the specific pages a module happens to know about.
+		if (is_object($hookmanager)) {
+			$hookmanager->initHooks(array('formfile'));
+		}
 
 		$out = '';
 		$this->infofiles = array('nboffiles' => 0, 'extensions' => array(), 'files' => array());
@@ -1227,31 +1234,54 @@ class FormFile
 					$this->infofiles['extensions'][$ext]++;
 				}
 
+				// $tmpfileout collects the <li> entries for this file only (unlike $tmpout, which
+				// accumulates entries for every file in the list) - kept separate so the hook below
+				// can append to or replace just this file's entries, same contract as
+				// formBuilddocLineOptions() in showdocuments() (append if hook returns 0, replace if >0),
+				// without a "replace" from one file wiping out entries already built for earlier files.
+				$tmpfileout = '';
+
 				// Preview
 				if (!empty($conf->use_javascript_ajax) && ($conf->browser->layout != 'phone')) {
 					$tmparray = getAdvancedPreviewUrl($modulepart, $relativepath, 1, '&entity='.$entity);
 					if ($tmparray && $tmparray['url']) {
-						$tmpout .= '<li><a href="'.$tmparray['url'].'"'.($tmparray['css'] ? ' class="'.$tmparray['css'].'"' : '').($tmparray['mime'] ? ' mime="'.$tmparray['mime'].'"' : '').($tmparray['target'] ? ' target="'.$tmparray['target'].'"' : '').'>';
-						//$tmpout.= img_picto('','detail');
-						$tmpout .= img_picto('', 'search-plus', 'class="paddingright"');
-						$tmpout .= $langs->trans("Preview").' '.$ext.'</a></li>';
+						$tmpfileout .= '<li><a href="'.$tmparray['url'].'"'.($tmparray['css'] ? ' class="'.$tmparray['css'].'"' : '').($tmparray['mime'] ? ' mime="'.$tmparray['mime'].'"' : '').($tmparray['target'] ? ' target="'.$tmparray['target'].'"' : '').'>';
+						//$tmpfileout.= img_picto('','detail');
+						$tmpfileout .= img_picto('', 'search-plus', 'class="paddingright"');
+						$tmpfileout .= $langs->trans("Preview").' '.$ext.'</a></li>';
 					}
 				}
 
 				// Download
-				$tmpout .= '<li class="nowrap"><a class="pictopreview nowrap" ';
+				$tmpfileout .= '<li class="nowrap"><a class="pictopreview nowrap" ';
 				if (getDolGlobalInt('MAIN_DISABLE_FORCE_SAVEAS') == 2) {
-					$tmpout .= 'target="_blank" ';
+					$tmpfileout .= 'target="_blank" ';
 				}
-				$tmpout .= 'href="'.DOL_URL_ROOT.'/document.php?modulepart='.$modulepart.'&amp;entity='.$entity.'&amp;file='.urlencode($relativepath).'"';
+				$tmpfileout .= 'href="'.DOL_URL_ROOT.'/document.php?modulepart='.$modulepart.'&amp;entity='.$entity.'&amp;file='.urlencode($relativepath).'"';
 				$mime = dol_mimetype($relativepath, '', 0);
 				if (preg_match('/text/', $mime)) {
-					$tmpout .= ' target="_blank" rel="noopener noreferrer"';
+					$tmpfileout .= ' target="_blank" rel="noopener noreferrer"';
 				}
-				$tmpout .= '>';
-				$tmpout .= img_mime($relativepath, $file["name"]);
-				$tmpout .= $langs->trans("Download").' '.$ext;
-				$tmpout .= '</a></li>'."\n";
+				$tmpfileout .= '>';
+				$tmpfileout .= img_mime($relativepath, $file["name"]);
+				$tmpfileout .= $langs->trans("Download").' '.$ext;
+				$tmpfileout .= '</a></li>'."\n";
+
+				// Allow modules to append extra <li> entries for this file (e.g. a custom preview for
+				// file types core does not know how to preview, like XML e-invoices), or replace this
+				// file's entries entirely - same contract as formBuilddocLineOptions() in showdocuments():
+				// return 0 (or nothing) to append ->resPrint, return >0 to replace $tmpfileout with it.
+				if (is_object($hookmanager)) {
+					$parameters = array('tmpout' => &$tmpfileout, 'modulepart' => $modulepart, 'relativepath' => $relativepath, 'entity' => $entity);
+					$res = $hookmanager->executeHooks('getDocumentsLinkLineOptions', $parameters, $file);
+					if (empty($res)) {
+						$tmpfileout .= $hookmanager->resPrint;
+					} else {
+						$tmpfileout = $hookmanager->resPrint;
+					}
+				}
+
+				$tmpout .= $tmpfileout;
 			}
 			$out .= $tmpout;
 			$out .= '</ul></div></dd>
