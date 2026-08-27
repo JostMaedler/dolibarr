@@ -279,10 +279,14 @@ if ($reshook > 0) {
 
 // Extra fields
 include DOL_DOCUMENT_ROOT.'/core/tpl/extrafields_list_array_fields.tpl.php';
+// Add hook to complete $arrayfield
+$parameters = array('arrayfields' => &$arrayfields);
+$reshook = $hookmanager->executeHooks('completeArrayFields', $parameters, $object, $action); // Note that $action and $object may have been modified by hook
 
 $object->fields = dol_sort_array($object->fields, 'position');
 //$arrayfields['anotherfield'] = array('type'=>'integer', 'label'=>'AnotherField', 'checked'=>1, 'enabled'=>1, 'position'=>90, 'csslist'=>'right');
 $arrayfields = dol_sort_array($arrayfields, 'position');
+
 
 
 // Security check
@@ -411,7 +415,7 @@ if (empty($reshook)) {
 	$month = "";
 	include DOL_DOCUMENT_ROOT.'/core/actions_massactions.inc.php';
 
-	if ($massaction == 'confirm_createbills') {   // Create bills from orders.
+	if ($massaction == 'confirm_createbills' && $user->hasRight('facture', 'creer')) {   // Create bills from orders.
 		$orders = GETPOST('toselect', 'array:int');
 		$createbills_onebythird = GETPOSTINT('createbills_onebythird');
 		$validate_invoices = GETPOSTINT('validate_invoices');
@@ -436,6 +440,15 @@ if (empty($reshook)) {
 			if ($cmd->fetch($id_order) <= 0) {
 				continue;
 			}
+
+			// Skip orders that cannot be billed, to mirror the "CreateBill" button availability on the order card
+			// (card.php only shows it when status > STATUS_DRAFT and the order is not already billed): this excludes
+			// draft and canceled orders, as well as orders already classified as billed.
+			if ($cmd->status <= Commande::STATUS_DRAFT || !empty($cmd->billed)) {
+				setEventMessages($langs->trans('WarningOrderNotEligibleForInvoicing', $cmd->ref), null, 'warnings');
+				continue;
+			}
+
 			$cmd->fetch_thirdparty();
 
 			$objecttmp = new Facture($db);
@@ -695,6 +708,7 @@ if (empty($reshook)) {
 				}
 
 				$id = $objecttmp->id; // For builddoc action
+				$lastref = $objecttmp->ref; // Refresh ref after validation (was the draft PROVxxxx ref set at creation)
 
 				// Builddoc
 				$donotredirect = 1;

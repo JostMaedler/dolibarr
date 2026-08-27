@@ -8,7 +8,7 @@
  * Copyright (C) 2018       Ferran Marcet           <fmarcet@2byte.es>
  * Copyright (C) 2021-2023  Anthony Berton          <anthony.berton@bb2a.fr>
  * Copyright (C) 2024-2026	MDW							<mdeweerd@users.noreply.github.com>
- * Copyright (C) 2024		Frédéric France				<frederic.france@free.fr>
+ * Copyright (C) 2024-2026  Frédéric France				<frederic.france@free.fr>
  * Copyright (C) 2025		Marc de Lima Lucio			<marc-dll@user.noreply.github.com>
  *
  * This program is free software; you can redistribute it and/or modify
@@ -360,7 +360,7 @@ $colortext = implode(',', colorStringToArray($colortext));
 $colortextlink = implode(',', colorStringToArray($colortextlink));
 
 // @phan-suppress-next-line PhanRedefinedClassReference
-$nbtopmenuentries = (is_object($menumanager) && method_exists($menumanager, 'showmenu')) ? $menumanager->showmenu('topnb') : 0;
+$nbtopmenuentries = is_object($menumanager) ? $menumanager->showmenu('topnb') : 0;
 $nbtopmenuentriesreal = $nbtopmenuentries;
 if ($conf->browser->layout == 'phone') {
 	$nbtopmenuentries = max($nbtopmenuentries, 10);
@@ -582,7 +582,7 @@ select.vmenusearchselectcombo {
 	background-color: unset;
 }
 
-textarea:focus:not(.ia-input) {
+textarea:focus:not(.ia-input, .cke_source) {
 	border: 1px solid #aaa !important;
 }
 input:focus:not(.input-icon-user, .input-icon-password, .input-icon-security):not(.noborderfocus):not(.inputsearch_dropdownselectedfields):not(.button):not(.buttonwebsite):not(.buttonreset):not(.select2-search__field):not(#top-bookmark-search-input):not(.search_component_input):not(.input-nobottom),
@@ -4716,6 +4716,7 @@ table.nointerlines tr:not(:last-child) td {
 <?php $borderradius = getDolGlobalString('THEME_ELDY_USEBORDERONTABLE') ? getDolGlobalInt('THEME_ELDY_BORDER_RADIUS', 6) : 0; ?>
 table.noborder:not(.cal_month, .paymenttable, .margintable) {
 	border-radius: <?php echo $borderradius; ?>px;
+	overflow: hidden; /* Firefox does not clip cell backgrounds to the table border-radius without this */
 }
 table.noborder.cal_month {
 	border-bottom-left-radius: <?php echo $borderradius; ?>px;
@@ -4757,6 +4758,7 @@ table.liste:not(.listwithfilterbefore) {
 table.liste {
 	border-bottom-left-radius: <?php echo $borderradius; ?>px;
 	border-bottom-right-radius: <?php echo $borderradius; ?>px;
+	overflow: hidden; /* Firefox does not clip cell backgrounds to the table border-radius without this */
 }
 table.liste:not(.listwithfilterbefore) tr.liste_titre_filter:first-child td:first-child,
 table.liste:not(.listwithfilterbefore) tr.liste_titre_filter:first-child th:first-child {
@@ -6256,6 +6258,10 @@ table.dp {
 }
 .categtextblack {
 	color: #000 !important;
+}
+
+.cke_source {
+	margin: 5px !important;
 }
 
 
